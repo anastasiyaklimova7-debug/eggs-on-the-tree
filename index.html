@@ -429,7 +429,17 @@
             const foundCount = treeEggs.filter(egg => egg !== null).length;
             if (foundCount === TARGET_WORDS.length) {
                 isWon = true;
+                
+                // Плавно скрываем оставшиеся яйца-обманки
+                Array.from(poolContainer.children).forEach(egg => {
+                    egg.style.transform = 'scale(0)';
+                    egg.style.opacity = '0';
+                });
+
                 setTimeout(() => {
+                    poolEggs = []; // Очищаем массив оставшихся яиц
+                    renderGame(); // Перерисовываем интерфейс (пул станет пустым)
+                    
                     playSuccessSound();
                     spawnContinuousFlowers();
                 }, 500);
