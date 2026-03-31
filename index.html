@@ -1,0 +1,442 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Игра: Easter Eggs Time Markers</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Стили для аккуратной прокрутки */
+        .custom-scrollbar::-webkit-scrollbar {
+            height: 12px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 10px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.5);
+            border-radius: 10px;
+            border: 2px solid transparent;
+            background-clip: padding-box;
+        }
+
+        /* Эффекты цветов */
+        @keyframes flowerFloat {
+            0% { transform: translate(0, 0) rotate(0deg) scale(0.5); opacity: 0; }
+            10% { opacity: 1; }
+            80% { opacity: 1; }
+            100% { transform: translate(var(--tx), var(--ty)) rotate(var(--rot)) scale(1.2); opacity: 0; }
+        }
+
+        .magic-particle {
+            position: absolute;
+            pointer-events: none;
+            z-index: 100;
+        }
+
+        /* Анимация появления финального окна */
+        @keyframes modalPop {
+            0% { transform: scale(0) rotate(-5deg); opacity: 0; }
+            60% { transform: scale(1.05) rotate(2deg); opacity: 1; }
+            100% { transform: scale(1) rotate(0deg); opacity: 1; }
+        }
+        .modal-animate {
+            animation: modalPop 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+        }
+
+        @keyframes flowerExplosion {
+            0% { transform: translate(0, 0) scale(0.5) rotate(0deg); opacity: 1; }
+            100% { transform: translate(var(--tx), var(--ty)) scale(0) rotate(var(--rot)); opacity: 0; }
+        }
+
+        /* Текст на яйцах с плотной белой обводкой для читаемости */
+        .egg-text {
+            color: #3e2723;
+            text-shadow: 
+                2px 2px 0px #fff, -2px -2px 0px #fff, 
+                2px -2px 0px #fff, -2px 2px 0px #fff,
+                0px 2px 0px #fff, 0px -2px 0px #fff,
+                2px 0px 0px #fff, -2px 0px 0px #fff,
+                1px 3px 5px rgba(0,0,0,0.4);
+            font-weight: 900;
+            line-height: 1.1;
+        }
+
+        /* Анимация при появлении/перемещении яйца */
+        @keyframes popIn {
+            0% { transform: scale(0.5); opacity: 0; }
+            80% { transform: scale(1.1); opacity: 1; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+        .egg-animate {
+            animation: popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+        }
+
+        /* Анимация ошибки (усиленная тряска и красное свечение) */
+        @keyframes shakeError {
+            0%, 100% { transform: translateX(0) scale(1); }
+            20% { transform: translateX(-12px) rotate(-5deg) scale(1.05); }
+            40% { transform: translateX(12px) rotate(5deg) scale(1.05); }
+            60% { transform: translateX(-8px) rotate(-3deg) scale(1.05); }
+            80% { transform: translateX(8px) rotate(3deg) scale(1.05); }
+        }
+        .error-shake {
+            animation: shakeError 0.5s ease-in-out !important;
+            filter: drop-shadow(0 0 25px rgba(255, 0, 0, 1)) !important;
+        }
+
+        /* Анимация красного крестика при ошибке */
+        @keyframes popCross {
+            0% { transform: translate(-50%, -50%) scale(0); opacity: 0; }
+            20% { transform: translate(-50%, -50%) scale(1.4); opacity: 1; }
+            80% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+            100% { transform: translate(-50%, -50%) scale(0.5); opacity: 0; }
+        }
+        .cross-animate {
+            animation: popCross 0.8s ease-out forwards;
+        }
+
+        .text-shadow-white {
+            text-shadow: 2px 2px 5px rgba(0, 0, 0, 0.8);
+        }
+        
+        .egg-hover-effect:hover {
+            transform: scale(1.05) translateY(-5px);
+            filter: drop-shadow(0 10px 15px rgba(0,0,0,0.3));
+        }
+
+        /* Пустой слот на ветке (полностью прозрачный) */
+        .tree-slot-empty {
+            width: 30%;
+            height: 40%;
+            background: transparent;
+            border: none;
+        }
+    </style>
+</head>
+<body class="bg-green-100 m-0 p-0 overflow-hidden font-sans h-screen flex flex-col">
+
+    <!-- ФОН -->
+    <div class="absolute inset-0 w-full h-full bg-cover bg-center bg-no-repeat pointer-events-none z-[-1]"
+         style="background-image: url('https://i.postimg.cc/mrx94V9H/clean_image_(8).png')">
+        <div class="absolute top-0 left-0 w-full h-48 bg-gradient-to-b from-black/60 to-transparent"></div>
+    </div>
+
+    <!-- Подсчет очков -->
+    <div class="absolute top-4 left-4 md:top-6 md:left-8 z-50">
+        <div class="w-16 h-16 md:w-20 md:h-20 rounded-full border-4 border-[#8bc34a] bg-white/90 backdrop-blur-sm flex items-center justify-center shadow-[0_4px_15px_rgba(0,0,0,0.2)] transition-all duration-300">
+            <span id="score-text" class="text-xl md:text-2xl font-black text-[#558b2f] leading-none">0/6</span>
+        </div>
+    </div>
+
+    <!-- Заголовок -->
+    <div class="relative z-20 text-center pt-8 px-4 flex-shrink-0">
+        <h1 class="text-xl md:text-2xl lg:text-3xl font-black text-white drop-shadow-2xl tracking-tight text-shadow-white max-w-4xl mx-auto leading-tight">
+            Choose time expressions <br class="md:hidden" /> (Present Simple)
+        </h1>
+    </div>
+
+    <!-- Основная игровая зона -->
+    <div class="relative z-10 flex-1 flex flex-col w-full max-w-[1200px] mx-auto px-2 pb-0 overflow-hidden gap-4 md:gap-8">
+        
+        <!-- Верхняя часть: Зона с доступными яйцами (возвращена на исходную позицию наверх) -->
+        <div class="w-full flex-shrink-0 z-20 flex justify-center items-center p-2 mt-4 md:mt-8 mb-0">
+            <div id="pool-container" class="flex flex-wrap justify-center items-center gap-3 sm:gap-5 w-full">
+                <!-- 8 яиц генерируются через JS -->
+            </div>
+        </div>
+
+        <!-- Центральная часть: Картинка с ветками (опущена ЕЩЁ ниже за счет сильного сдвига) -->
+        <div class="w-full flex-1 flex items-end justify-center relative min-h-0 z-10 mt-auto translate-y-12 md:translate-y-24 lg:translate-y-36">
+            <!-- Дерево -->
+            <div id="tree-container" class="relative w-full max-w-[450px] md:max-w-[650px] lg:max-w-[850px]">
+                
+                <!-- Обертка для обрезки нижней части (ствола) -->
+                <div class="w-full relative overflow-hidden" style="padding-bottom: 82%;">
+                    <img src="https://i.postimg.cc/rp95FTJh/Gemini-Generated-Image-itaxa6itaxa6itax.png" 
+                         alt="Branches" 
+                         class="absolute top-0 left-0 w-full h-auto pointer-events-none drop-shadow-2xl" />
+                </div>
+                
+                <!-- Слоты сохраняют оригинальные пропорции картинки -->
+                <div id="tree-slots" class="absolute top-0 left-0 w-full pointer-events-none" style="height: 121.95%;"></div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Контейнер для эффектов -->
+    <div id="effects-container" class="fixed inset-0 pointer-events-none z-[100]"></div>
+
+    <script>
+        const TARGET_WORDS = ["always", "usually", "sometimes", "often", "never", "every day"];
+        const DISTRACTOR_WORDS = ["yesterday", "tomorrow", "now", "last week", "at the moment", "next year", "ago"];
+        const TOTAL_EGGS = 8; 
+
+        const EGG_IMAGES = [
+            "https://i.postimg.cc/d3t7txnL/Gemini_Generated_Image_ofgdfaofgdfaofgd.png",
+            "https://i.postimg.cc/KjvKvHQ1/Gemini_Generated_Image_qzmy5aqzmy5aqzmy.png",
+            "https://i.postimg.cc/MHKcKFtX/Gemini_Generated_Image_ulfnuulfnuulfnuu.png"
+        ];
+
+        // Позиции ЖЕСТКО закреплены за конкретными словами из списка TARGET_WORDS
+        const TREE_POSITIONS = [
+            { top: '14%', left: '43%' }, // 1. always
+            { top: '14%', left: '57%' }, // 2. usually
+            { top: '29%', left: '35%' }, // 3. sometimes
+            { top: '18%', left: '22%' }, // 4. often (теперь выше и левее sometimes)
+            { top: '44%', left: '39%' }, // 5. never
+            { top: '44%', left: '61%' }  // 6. every day
+        ];
+
+        let poolEggs = [];
+        let treeEggs = [];
+        let isWon = false;
+        let flowerInterval = null; // Добавили переменную для анимации
+
+        const poolContainer = document.getElementById('pool-container');
+        const treeSlotsContainer = document.getElementById('tree-slots');
+        const effectsContainer = document.getElementById('effects-container');
+        const scoreText = document.getElementById('score-text');
+
+        function startGame() {
+            isWon = false;
+            if (flowerInterval) clearInterval(flowerInterval); // Очищаем старую анимацию при старте
+            effectsContainer.innerHTML = '';
+            
+            const targetSet = [...TARGET_WORDS];
+            const shuffledDistractors = [...DISTRACTOR_WORDS].sort(() => Math.random() - 0.5);
+            const distractorSet = shuffledDistractors.slice(0, TOTAL_EGGS - TARGET_WORDS.length);
+            
+            let combinedWords = targetSet.map(word => ({ word: word, isTarget: true }));
+            combinedWords = combinedWords.concat(distractorSet.map(word => ({ word: word, isTarget: false })));
+            combinedWords.sort(() => Math.random() - 0.5);
+
+            poolEggs = combinedWords.map((item, idx) => {
+                const imgIndex = Math.floor(Math.random() * EGG_IMAGES.length);
+                return { 
+                    id: idx + 1, 
+                    word: item.word, 
+                    imgUrl: EGG_IMAGES[imgIndex],
+                    isTarget: item.isTarget
+                };
+            });
+
+            treeEggs = new Array(TARGET_WORDS.length).fill(null);
+            
+            updateScoreDisplay();
+            renderGame();
+        }
+
+        function updateScoreDisplay() {
+            const foundCount = treeEggs.filter(egg => egg !== null).length;
+            scoreText.innerText = `${foundCount}/${TARGET_WORDS.length}`;
+        }
+
+        function renderGame() {
+            treeSlotsContainer.innerHTML = '';
+            for (let i = 0; i < TARGET_WORDS.length; i++) {
+                const slotContainer = document.createElement('div');
+                slotContainer.className = 'absolute transform -translate-x-1/2 -translate-y-1/2 flex justify-center items-center pointer-events-auto';
+                slotContainer.style.top = TREE_POSITIONS[i].top;
+                slotContainer.style.left = TREE_POSITIONS[i].left;
+                
+                // Чуть-чуть уменьшили максимум (было 115px, стало 105px), чтобы вписались в крону
+                slotContainer.style.width = 'clamp(70px, 9vw, 105px)'; 
+                
+                const eggData = treeEggs[i];
+
+                if (eggData) {
+                    slotContainer.className += ' cursor-pointer egg-hover-effect egg-animate';
+                    slotContainer.innerHTML = createEggHTML(eggData);
+                    
+                    slotContainer.onclick = () => {
+                        if (isWon) return;
+                        treeEggs[i] = null;
+                        poolEggs.push(eggData);
+                        playClickSound();
+                        updateScoreDisplay();
+                        renderGame();
+                    };
+                } else {
+                    slotContainer.innerHTML = `<div class="tree-slot-empty"></div>`;
+                }
+                treeSlotsContainer.appendChild(slotContainer);
+            }
+
+            poolContainer.innerHTML = '';
+            poolEggs.forEach((eggData) => {
+                const eggDiv = document.createElement('div');
+                
+                // Такой же размер для яиц вверху
+                eggDiv.style.width = 'clamp(70px, 9vw, 105px)';
+                
+                eggDiv.className = 'relative flex justify-center items-center cursor-pointer egg-hover-effect egg-animate transition-transform duration-300 pointer-events-auto';
+                eggDiv.innerHTML = createEggHTML(eggData); 
+                
+                eggDiv.onclick = () => {
+                    if (isWon) return;
+                    
+                    if (eggData.isTarget) {
+                        // Теперь яйцо отправляется не в первый свободный слот, а строго в СВОЙ слот по индексу
+                        const targetIndex = TARGET_WORDS.indexOf(eggData.word);
+                        if (targetIndex !== -1 && treeEggs[targetIndex] === null) {
+                            playClickSound();
+                            poolEggs = poolEggs.filter(e => e.id !== eggData.id);
+                            treeEggs[targetIndex] = eggData;
+                            updateScoreDisplay();
+                            renderGame();
+                            checkWinCondition();
+                        }
+                    } else {
+                        playErrorSound();
+                        eggDiv.classList.add('error-shake');
+                        
+                        const cross = document.createElement('div');
+                        cross.innerHTML = '❌';
+                        cross.className = 'absolute top-1/2 left-1/2 text-4xl md:text-5xl drop-shadow-2xl z-[100] pointer-events-none cross-animate';
+                        eggDiv.appendChild(cross);
+                        
+                        setTimeout(() => {
+                            eggDiv.classList.remove('error-shake');
+                            if (eggDiv.contains(cross)) eggDiv.removeChild(cross);
+                        }, 800);
+                    }
+                };
+                poolContainer.appendChild(eggDiv);
+            });
+        }
+
+        function createEggHTML(eggData) {
+            let fontSizeStyle = `clamp(0.7rem, 1.2vw, 1.1rem)`;
+            if (eggData.word.length > 8) fontSizeStyle = `clamp(0.6rem, 0.9vw, 0.9rem)`;
+            
+            return `
+                <img src="${eggData.imgUrl}" alt="Egg" class="w-full h-auto block pointer-events-none drop-shadow-xl transition-all duration-300 transform scale-[1.3]" draggable="false" />
+                <div class="absolute inset-0 flex justify-center items-center pointer-events-none p-1 text-center z-10">
+                    <span class="egg-text break-words leading-tight" style="font-size: ${fontSizeStyle};">${eggData.word}</span>
+                </div>
+            `;
+        }
+
+        // --- Эффекты ---
+        function spawnContinuousFlowers() {
+            const colors = ['#FF5252', '#FF4081', '#E040FB', '#7C4DFF', '#448AFF', '#18FFFF', '#69F0AE', '#FFEB3B', '#FF9800'];
+            const flowerSVG = `<svg viewBox="0 0 100 100" width="100%" height="100%"><g fill="currentColor"><circle cx="50" cy="20" r="20" /><circle cx="78" cy="40" r="20" /><circle cx="67" cy="73" r="20" /><circle cx="33" cy="73" r="20" /><circle cx="22" cy="40" r="20" /></g><circle cx="50" cy="50" r="16" fill="#FFF9C4" /></svg>`;
+            
+            const createFlower = (isLeft) => {
+                const particle = document.createElement('div');
+                particle.className = 'magic-particle';
+                particle.innerHTML = flowerSVG;
+                
+                // Начинаем снизу экрана
+                particle.style.top = '105vh'; 
+                
+                // Смещение по горизонтали (слева или справа)
+                const horizontalDrift = (Math.random() * 20 - 10) + 'vw';
+                if (isLeft) { 
+                    particle.style.left = (Math.random() * 25) + 'vw'; 
+                    particle.style.setProperty('--tx', horizontalDrift); 
+                } else { 
+                    particle.style.right = (Math.random() * 25) + 'vw'; 
+                    particle.style.setProperty('--tx', horizontalDrift); 
+                }
+                
+                // Высота полета
+                particle.style.setProperty('--ty', -(Math.random() * 80 + 80) + 'vh');
+                
+                const size = Math.random() * 30 + 20; 
+                particle.style.width = size + 'px'; 
+                particle.style.height = size + 'px';
+                particle.style.color = colors[Math.floor(Math.random() * colors.length)];
+                particle.style.filter = 'drop-shadow(0px 4px 8px rgba(0,0,0,0.3))';
+                
+                const rotation = Math.random() > 0.5 ? 360 : -360;
+                particle.style.setProperty('--rot', rotation + 'deg');
+                
+                const duration = Math.random() * 3 + 4; // 4-7 секунд полета
+                particle.style.animation = `flowerFloat ${duration}s ease-out forwards`;
+                
+                effectsContainer.appendChild(particle);
+                setTimeout(() => particle.remove(), duration * 1000);
+            };
+
+            // Запускаем бесконечный цикл (сохраняем ID)
+            flowerInterval = setInterval(() => {
+                createFlower(true);  // Цветочек слева
+                createFlower(false); // Цветочек справа
+            }, 250); // каждые 250 мс
+        }
+
+        // --- Звуки ---
+        function playSuccessSound() {
+            try {
+                const AudioContext = window.AudioContext || window.webkitAudioContext;
+                const ctx = new AudioContext();
+                const playNote = (freq, startTime, duration) => {
+                    const osc = ctx.createOscillator();
+                    const gain = ctx.createGain();
+                    osc.type = 'sine'; osc.frequency.value = freq;
+                    gain.gain.setValueAtTime(0, startTime);
+                    gain.gain.linearRampToValueAtTime(0.2, startTime + 0.05);
+                    gain.gain.exponentialRampToValueAtTime(0.01, startTime + duration);
+                    osc.connect(gain); gain.connect(ctx.destination);
+                    osc.start(startTime); osc.stop(startTime + duration);
+                };
+                const now = ctx.currentTime;
+                playNote(523.25, now, 0.4); playNote(659.25, now + 0.15, 0.4);
+                playNote(783.99, now + 0.3, 0.6); playNote(1046.50, now + 0.45, 1.0);
+            } catch (e) {}
+        }
+
+        function playClickSound() {
+            try {
+                const AudioContext = window.AudioContext || window.webkitAudioContext;
+                const ctx = new AudioContext();
+                const osc = ctx.createOscillator();
+                const gain = ctx.createGain();
+                osc.type = 'sine'; osc.frequency.setValueAtTime(800, ctx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(1200, ctx.currentTime + 0.1);
+                gain.gain.setValueAtTime(0, ctx.currentTime);
+                gain.gain.linearRampToValueAtTime(0.1, ctx.currentTime + 0.02);
+                gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.1);
+                osc.connect(gain); gain.connect(ctx.destination);
+                osc.start(ctx.currentTime); osc.stop(ctx.currentTime + 0.1);
+            } catch (e) {}
+        }
+
+        function playErrorSound() {
+            try {
+                const AudioContext = window.AudioContext || window.webkitAudioContext;
+                const ctx = new AudioContext();
+                const playTone = (freq, type, startTime, duration) => {
+                    const osc = ctx.createOscillator();
+                    const gain = ctx.createGain();
+                    osc.type = type; osc.frequency.setValueAtTime(freq, startTime);
+                    gain.gain.setValueAtTime(0, startTime);
+                    gain.gain.linearRampToValueAtTime(0.15, startTime + 0.02);
+                    gain.gain.linearRampToValueAtTime(0, startTime + duration);
+                    osc.connect(gain); gain.connect(ctx.destination);
+                    osc.start(startTime); osc.stop(startTime + duration);
+                };
+                const now = ctx.currentTime;
+                playTone(150, 'sawtooth', now, 0.15); playTone(110, 'sawtooth', now + 0.18, 0.25);
+            } catch (e) {}
+        }
+
+        function checkWinCondition() {
+            const foundCount = treeEggs.filter(egg => egg !== null).length;
+            if (foundCount === TARGET_WORDS.length) {
+                isWon = true;
+                setTimeout(() => {
+                    playSuccessSound();
+                    spawnContinuousFlowers();
+                }, 500);
+            }
+        }
+
+        window.addEventListener('DOMContentLoaded', startGame);
+    </script>
+</body>
+</html>
